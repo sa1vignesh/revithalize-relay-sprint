@@ -1,0 +1,14 @@
+{
+  "info": { "name": "RELAY - Module 4 (Ingestion)", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "variable": [ { "key": "base", "value": "http://localhost:4000/api/v1" }, { "key": "token", "value": "" }, { "key": "vehicleId", "value": "" } ],
+  "item": [
+    { "name": "Search by last 5 chars (public)", "request": { "method": "GET", "url": "{{base}}/vehicles/search?chassis=ABC12" } },
+    { "name": "Vehicle history", "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base}}/vehicles/{{vehicleId}}/history" } },
+    { "name": "Ingest OEM (Hero)", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+      "url": "{{base}}/ingest/oem",
+      "body": { "mode": "raw", "raw": "{\n  \"oemName\": \"Hero\",\n  \"records\": [{ \"dealer_code\": \"HER-HYD-01\", \"chassis_no\": \"MBLXX12345\", \"service_date\": \"01-03-2024\", \"odometer_km\": 3200, \"service_type\": \"periodic\", \"is_confirmed\": 1 }],\n  \"vehicles\": [{ \"chassisNo\": \"MBLXX12345\", \"model\": \"Splendor Plus\", \"year\": 2021, \"registration\": \"TS-09-AB-1234\" }]\n}" } } },
+    { "name": "Ingest owner garage visit", "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }, { "key": "Content-Type", "value": "application/json" }],
+      "url": "{{base}}/ingest/owner",
+      "body": { "mode": "raw", "raw": "{\n  \"vehicleId\": \"{{vehicleId}}\",\n  \"serviceDate\": \"2026-09-10\",\n  \"odometerKm\": 24500,\n  \"serviceType\": \"Periodic\",\n  \"garageName\": \"Raju Garage\"\n}" } } }
+  ]
+}

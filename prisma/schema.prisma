@@ -1,0 +1,82 @@
+// Schema per sprint spec (Module 3). If Althaf's committed schema differs, use his and drop this file.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ServiceType { Periodic Repair Recall }
+enum ConfirmedBy { OEM_DEALER OWNER_SELF LOCAL_GARAGE }
+enum RecordStatus { ACTIVE ARCHIVED }
+enum HandoverStatus { PENDING ACCEPTED EXPIRED }
+
+model Owner {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  role      String   @default("owner")
+  createdAt DateTime @default(now())
+  vehicles  Vehicle[]
+}
+
+model Vehicle {
+  id             String   @id @default(uuid())
+  oem            String
+  model          String
+  year           Int
+  chassisNo      String   @unique
+  registration   String
+  currentOwnerId String?
+  currentOwner   Owner?   @relation(fields: [currentOwnerId], references: [id])
+  serviceRecords ServiceRecord[]
+  signedRecords  SignedRecord[]
+  handovers      Handover[]
+
+  @@index([oem])
+}
+
+model ServiceRecord {
+  id          String      @id @default(uuid())
+  vehicleId   String
+  vehicle     Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  serviceDate DateTime
+  odometerKm  Int
+  serviceType ServiceType
+  confirmedBy ConfirmedBy
+  oemName     String
+  dealerCode  String?
+  notes       String?
+
+  @@index([vehicleId, serviceDate])
+}
+
+model SignedRecord {
+  id            String       @id @default(uuid())
+  vehicleId     String
+  vehicle       Vehicle      @relation(fields: [vehicleId], references: [id])
+  signature     String
+  signedAt      DateTime     @default(now())
+  signedByOwnerId String
+  status        RecordStatus @default(ACTIVE)
+}
+
+model Handover {
+  id        String         @id @default(uuid())
+  vehicleId String
+  vehicle   Vehicle        @relation(fields: [vehicleId], references: [id])
+  token     String         @unique
+  expiresAt DateTime
+  status    HandoverStatus @default(PENDING)
+  buyerId   String?
+}
+
+model ShowroomPrice {
+  id       String @id @default(uuid())
+  oem      String
+  model    String
+  priceInr Int
+
+  @@unique([oem, model])
+}
