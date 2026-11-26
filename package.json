@@ -6,6 +6,7 @@
     "seed": "node seed.js",
     "export:csv": "node scripts/exportQualityCsv.js",
     "dev": "node src/server.dev.js",
+    "demo": "node src/server.dev.js",
     "test": "jest"
   },
   "prisma": { "seed": "node seed.js" },

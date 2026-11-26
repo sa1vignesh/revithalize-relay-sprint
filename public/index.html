@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RELAY – Module 4 Demo</title>
+<style>
+:root{--bg:#f4f1ea;--card:#fff;--ink:#0f1b2d;--mute:#5d6778;--line:#d9d3c5;--amber:#f2a541;--ok:#1d7a4d;--okbg:#dff3e8;--bad:#b3261e;--badbg:#fbe2df;--warn:#8a5a00;--warnbg:#fdf0d5}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1b2d;--card:#1b2b45;--ink:#f4f1ea;--mute:#a8b2c3;--line:#2f4262;--ok:#7fe0aa;--okbg:#17402e;--bad:#ff9a92;--badbg:#4a1f1c;--warn:#ffd27a;--warnbg:#47360f}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{padding:20px 24px;border-bottom:1px solid var(--line)}header h1{margin:0;font-size:22px}header p{margin:4px 0 0;color:var(--mute);font-size:14px}
+nav{display:flex;gap:8px;padding:12px 24px;flex-wrap:wrap}nav button{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:10px 16px;border-radius:999px;font-size:15px;cursor:pointer}
+nav button.on{background:var(--amber);border-color:var(--amber);color:#0f1b2d;font-weight:600}
+main{max-width:900px;margin:0 auto;padding:8px 24px 48px}section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input#chassis{font-size:28px;letter-spacing:6px;text-transform:uppercase;width:200px;text-align:center}
+button.go{background:var(--ink);color:var(--bg);border:0;border-radius:10px;padding:11px 18px;font-size:16px;cursor:pointer}
+button.go:disabled{opacity:.5}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:13px;cursor:pointer}
+.muted{color:var(--mute);font-size:14px}.banner{border-radius:12px;padding:14px 16px;font-weight:600;margin:12px 0}
+.b-ok{background:var(--okbg);color:var(--ok)}.b-warn{background:var(--warnbg);color:var(--warn)}.b-bad{background:var(--badbg);color:var(--bad)}
+.tl{list-style:none;margin:0;padding:0 0 0 22px;border-left:2px solid var(--line)}.tl li{position:relative;padding:0 0 18px 18px}
+.dot{position:absolute;left:-30px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--ink);border:2px solid var(--ink)}.dot.hollow{background:var(--bg)}
+.gap{display:inline-block;background:var(--badbg);color:var(--bad);border-radius:6px;padding:2px 8px;font-size:13px;font-weight:600;margin-bottom:6px}
+.tag{font-size:12px;color:var(--mute)}textarea{width:100%;min-height:190px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;font-size:13px;margin:8px 0 0}
+.flags li{margin:4px 0}label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+</style>
+</head>
+<body>
+<header><h1>RELAY – Module 4 demo</h1><p>OEM ingestion layer and synthetic data · Sai Vignesh (SD/09)</p></header>
+<nav>
+  <button class="on" data-tab="check">1. Chassis check</button>
+  <button data-tab="play">2. Adapter playground</button>
+  <button data-tab="visit">3. Add garage visit</button>
+</nav>
+<main>
+
+<section id="check" class="on">
+  <div class="card">
+    <p class="muted">Type the last 5 characters of a chassis number, as a buyer would. Or tap a sample from the seeded database.</p>
+    <div class="row"><input id="chassis" maxlength="5" placeholder="ABC12" autocomplete="off"><button class="go" id="searchBtn">Check</button></div>
+    <p class="muted" style="margin:12px 0 6px">Samples from the database:</p>
+    <div class="row" id="samples"><span class="muted">Loading… (run <code>node seed.js</code> first if empty)</span></div>
+  </div>
+  <div id="result"></div>
+</section>
+
+<section id="play">
+  <div class="card">
+    <p class="muted">Each OEM sends data in its own format. Pick an OEM, edit the raw record if you like, and see it converted into the one common format. Nothing is saved.</p>
+    <div class="row"><select id="oemSel"></select><button class="go" id="normBtn">Convert</button></div>
+    <label>Raw OEM record</label><textarea id="raw" spellcheck="false"></textarea>
+    <label>Common format (after adapter + Zod check)</label><div id="normOut"><pre>Press Convert.</pre></div>
+  </div>
+</section>
+
+<section id="visit">
+  <div class="card">
+    <p class="muted">A seller adds a visit to a local garage. It is saved as <b>unconfirmed</b> and shows with a hollow dot in the timeline.</p>
+    <p id="visitFor" class="muted"><b>No vehicle selected.</b> Do a chassis check first, then come back here.</p>
+    <label>Service date</label><input type="date" id="vDate">
+    <label>Odometer (km)</label><input type="number" id="vKm" min="0" placeholder="e.g. 24500">
+    <label>Garage name</label><input id="vGarage" placeholder="Raju Garage">
+    <p style="margin-top:14px"><button class="go" id="visitBtn">Save visit</button></p>
+    <div id="visitMsg"></div>
+  </div>
+</section>
+
+</main>
+<script>
+const API = "/api/v1";
+let current = null; // selected vehicle
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+async function call(path, opts) {
+  try {
+    const r = await fetch(API + path, { headers: { "Content-Type": "application/json" }, ...opts });
+    const j = await r.json();
+    return { status: r.status, ...j };
+  } catch { return { status: 0, success: false, error: "Cannot reach the server. Is it running?" }; }
+}
+
+// tabs
+document.querySelectorAll("nav button").forEach((b) => b.onclick = () => {
+  document.querySelectorAll("nav button, section").forEach((e) => e.classList.remove("on"));
+  b.classList.add("on"); document.getElementById(b.dataset.tab).classList.add("on");
+});
+
+// same 4 odometer rules as the backend (interim copy of the Data Engine rules)
+const MONTH = 30.44 * 86400000;
+function checkOdometer(h) {
+  const flags = [];
+  for (let i = 1; i < h.length; i++) {
+    const diff = h[i].odometerKm - h[i - 1].odometerKm, gap = new Date(h[i].serviceDate) - new Date(h[i - 1].serviceDate);
+    const d = h[i].serviceDate.slice(0, 10);
+    if (diff < 0) flags.push({ flag: "TAMPER SUSPECTED", detail: `Reading fell by ${-diff} km (${d})` });
+    else if (diff > 60000 && gap < 3 * MONTH) flags.push({ flag: "SUSPICIOUS", detail: `+${diff.toLocaleString()} km in under 3 months (${d})` });
+    else if (diff < 500) flags.push({ flag: "SUSPICIOUS", detail: `Only ${diff} km between entries (${d})` });
+    if (gap > 15 * MONTH) flags.push({ flag: "GAP", detail: `${Math.round(gap / MONTH)} months without service before ${d}` });
+  }
+  const status = flags.some((f) => f.flag !== "GAP") ? "Suspicious" : flags.length ? "Flagged" : "Consistent";
+  return { status, flags };
+}
+
+// ---- tab 1: chassis check
+async function search(c5) {
+  c5 = (c5 || "").trim().toUpperCase();
+  const out = document.getElementById("result");
+  out.innerHTML = '<div class="card muted">Searching…</div>';
+  const s = await call("/vehicles/search?chassis=" + encodeURIComponent(c5));
+  if (s.status === 429) return out.innerHTML = `<div class="banner b-bad">Too many searches. ${esc(s.error)}</div>`;
+  if (!s.success) return out.innerHTML = `<div class="banner b-bad">${esc(s.error)}</div>`;
+  if (!s.data.length) { current = null; return out.innerHTML = '<div class="banner b-warn">No RELAY record found for this vehicle.</div>'; }
+  await showVehicle(s.data[0]);
+}
+async function showVehicle(v) {
+  current = v;
+  const out = document.getElementById("result");
+  const h = await call(`/vehicles/${v.id}/history`);
+  if (!h.success) return out.innerHTML = `<div class="banner b-bad">${esc(h.error)}</div>`;
+  const hist = h.data.history, od = checkOdometer(hist);
+  const cls = od.status === "Consistent" ? "b-ok" : od.status === "Flagged" ? "b-warn" : "b-bad";
+  out.innerHTML = `
+    <div class="card"><b style="font-size:20px">${esc(v.oem)} ${esc(v.model)}</b> <span class="muted">· ${esc(v.year)} · ${esc(v.registrationMasked)}</span>
+      <div class="banner ${cls}">Odometer: ${od.status}</div>
+      ${od.flags.length ? `<ul class="flags">${od.flags.map((f) => `<li><b>${esc(f.flag)}</b> – ${esc(f.detail)}</li>`).join("")}</ul>` : '<p class="muted">No reading went backwards. No long gaps.</p>'}
+    </div>
+    <div class="card"><b>Service history</b> <span class="muted">(${hist.length} entries, filled dot = confirmed by OEM dealer, hollow = owner-added)</span>
+      <ul class="tl" style="margin-top:16px">${hist.map((e) => `<li><span class="dot ${e.confirmed ? "" : "hollow"}"></span>
+        ${e.gapMonthsFromPrevious >= 15 ? `<div class="gap">Gap: ${e.gapMonthsFromPrevious} months</div>` : ""}
+        <div><b>${esc(e.serviceDate.slice(0, 10))}</b> · ${e.odometerKm.toLocaleString()} km · ${esc(e.serviceType)}</div>
+        <div class="tag">${e.confirmed ? "Confirmed · " + esc(e.dealerCode || "") : "Unconfirmed · " + esc(e.notes || "owner-added")}</div></li>`).join("")}</ul></div>`;
+  document.getElementById("visitFor").innerHTML = `Adding a visit for <b>${esc(v.oem)} ${esc(v.model)}</b> (${esc(v.registrationMasked)}).`;
+}
+document.getElementById("searchBtn").onclick = () => search(document.getElementById("chassis").value);
+document.getElementById("chassis").onkeydown = (e) => { if (e.key === "Enter") search(e.target.value); };
+(async () => {
+  const s = await call("/demo/samples"), box = document.getElementById("samples");
+  if (!s.success || !s.data.length) return;
+  box.innerHTML = s.data.map((r) => `<button class="chip" data-c="${esc(r.chassis5)}">${esc(r.chassis5)} · ${esc(r.oem)} ${esc(r.model)} (${esc(r.status)})</button>`).join("");
+  box.querySelectorAll(".chip").forEach((c) => c.onclick = () => { document.getElementById("chassis").value = c.dataset.c; search(c.dataset.c); });
+})();
+
+// ---- tab 2: adapter playground
+const SAMPLES = {
+  "Honda": { dealerCode: "HND-HYD-01", chassisNumber: "ME4A185SFWPA0255V", serviceDate: "2024-03-01", odometerReading: 3200, jobType: "PERIODIC", verifiedByDealer: true },
+  "Hero": { dealer_code: "HER-WGL-02", chassis_no: "MBLA20XY12345ABCD", service_date: "01-03-2024", odometer_km: 3200, service_type: "periodic", is_confirmed: 1 },
+  "TVS": { DlrCd: "TVS-KNR-03", ChassisNumber: "MD6A21ABC12345XYZ", SvcDt: 1709251200000, OdoKm: "3,200", SvcCategory: "PS", Confirmed: "Y" },
+  "Bajaj": { DealerCode: "BJJ-NZB-04", FrameNo: "MD2A22ABC12345XYZ", VisitDate: "2024/03/01", Kms: "3200 km", VisitType: "Periodic Service", Status: "CLOSED" },
+  "Royal Enfield": { outlet: { code: "RE-KHM-05" }, vehicle: { chassis: "ME3A19ABC12345XYZ" }, service: { date: "2024-03-01", odometer: { value: 2000, unit: "mi" }, category: "Periodic" }, confirmed: true },
+};
+const sel = document.getElementById("oemSel"), raw = document.getElementById("raw");
+sel.innerHTML = Object.keys(SAMPLES).map((o) => `<option>${o}</option>`).join("");
+const fill = () => { raw.value = JSON.stringify(SAMPLES[sel.value], null, 2); document.getElementById("normOut").innerHTML = "<pre>Press Convert.</pre>"; };
+sel.onchange = fill; fill();
+document.getElementById("normBtn").onclick = async () => {
+  const out = document.getElementById("normOut");
+  let rec; try { rec = JSON.parse(raw.value); } catch { return out.innerHTML = '<div class="banner b-bad">That is not valid JSON.</div>'; }
+  const r = await call("/ingest/preview", { method: "POST", body: JSON.stringify({ oemName: sel.value, records: [rec] }) });
+  if (!r.success) return out.innerHTML = `<div class="banner b-bad">${esc(r.error)}</div>`;
+  const x = r.data.results[0];
+  out.innerHTML = x.ok ? `<div class="banner b-ok">Passed the Zod check</div><pre>${esc(JSON.stringify(x.data, null, 2))}</pre>` : `<div class="banner b-bad">Rejected: ${esc(x.error)}</div>`;
+};
+
+// ---- tab 3: owner garage visit
+document.getElementById("visitBtn").onclick = async () => {
+  const msg = document.getElementById("visitMsg");
+  if (!current) return msg.innerHTML = '<div class="banner b-warn">Do a chassis check first so a vehicle is selected.</div>';
+  const body = { vehicleId: current.id, serviceDate: document.getElementById("vDate").value, odometerKm: Number(document.getElementById("vKm").value), garageName: document.getElementById("vGarage").value || undefined };
+  const r = await call("/ingest/owner", { method: "POST", body: JSON.stringify(body) });
+  if (!r.success) return msg.innerHTML = `<div class="banner b-bad">${esc(r.error)}</div>`;
+  msg.innerHTML = '<div class="banner b-ok">Saved as unconfirmed. Open the Chassis check tab to see the hollow dot.</div>';
+  showVehicle(current);
+};
+</script>
+</body>
+</html>
