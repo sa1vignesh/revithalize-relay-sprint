@@ -1,82 +1,142 @@
-# RELAY Backend - Module 4: OEM Ingestion Layer & Synthetic Data
+# RELAY – Module 4: OEM Ingestion Layer & Synthetic Data
 
-Revithalize Mobility - RELAY Sprint (Ref: RMPL/RELAY/SPRINT/NOV/2026/01)
-Module owner: Sai Vignesh (SD/09)
+**Revithalize Mobility – RELAY Sprint** (Ref: RMPL/RELAY/SPRINT/NOV/2026/01)
+**Module SD/09** · Built by Sai Vignesh
 
-RELAY is a verified vehicle-history product for used two-wheelers. This module is the data pipeline: an OEM-agnostic adapter layer, a synthetic data seed, and the ingestion and chassis-search APIs. When a real OEM API is connected later, only the adapter changes.
+RELAY is a verified vehicle-history product for used two-wheelers. A seller shares a signed service record, and a buyer checks it by typing the last 5 characters of the chassis number. This module is the data pipeline behind it: it turns the different formats of five OEMs into one common record, and it generates realistic data for the whole team to build and test on.
+
+## Demo
+
+Run the interface with `npm run demo:nodb` (no database needed), then open http://localhost:4000.
+
+### Chassis check
+
+Type the last 5 characters of a chassis number. The page shows the vehicle, an odometer banner and the service timeline. Gaps between visits are always shown, never hidden.
+
+| Clean history                                           | Odometer problem found                                             |
+| ------------------------------------------------------- | ------------------------------------------------------------------ |
+| ![Clean history](docs/screenshots/01-chassis-clean.png) | ![Suspicious odometer](docs/screenshots/02-chassis-suspicious.png) |
+
+![Gap in service history](docs/screenshots/03-gap-timeline.png)
+
+### Adapter playground
+
+Each OEM sends data in its own format. The playground converts a raw record into the one common format and shows when the Zod check rejects bad data. Nothing is saved.
+
+| Converted                                                         | Rejected                                                |
+| ----------------------------------------------------------------- | ------------------------------------------------------- |
+| ![Adapter playground](docs/screenshots/04-adapter-playground.png) | ![Zod rejection](docs/screenshots/05-zod-rejection.png) |
+
+### Owner-added garage visit
+
+A seller can add a visit to a local garage. It is stored as **unconfirmed** and shown with a hollow dot, so it is never mistaken for an OEM dealer record.
+
+![Garage visit](docs/screenshots/06-garage-visit.png)
+
+## How the data flows
+
+```
+Raw OEM JSON  →  Adapter transform()  →  Zod common schema  →  PostgreSQL (Prisma)  →  APIs
+```
+
+Every adapter produces the same shape:
+
+```json
+{
+  "oem": "Hero",
+  "dealerCode": "HER-HYD-01",
+  "chassisNo": "MBLA20XY12345ABCD",
+  "serviceDate": "2024-03-01T00:00:00.000Z",
+  "odometerKm": 3200,
+  "serviceType": "Periodic",
+  "confirmed": true
+}
+```
+
+When a real OEM API is connected later, only that OEM's adapter changes. Nothing else in RELAY needs to be touched. See [ADAPTERS.md](ADAPTERS.md).
 
 ## What is in this module
 
-| Part | Location |
-|---|---|
-| 5 OEM adapters (Honda, Hero, TVS, Bajaj, Royal Enfield) | `src/adapters/` |
-| Common schema + Zod validation | `src/adapters/schema.js` |
-| Seed script (500 vehicles, 75 anomalies) | `seed.js`, `src/seed/` |
-| Ingestion API (`/ingest/oem`, `/ingest/owner`) | `src/routes/ingest.js` |
-| Chassis search (rate limited) + service history | `src/routes/vehicles.js` |
-| Data quality CSV export | `src/lib/qualityCsv.js`, `scripts/exportQualityCsv.js` |
-| Showroom price table | `src/data/models.js`, `ShowroomPrice` table |
-| Tests (Jest + Supertest) | `tests/` |
-| Adapter documentation | `ADAPTERS.md` |
-| Postman collection | `RELAY-Module4.postman_collection.json` |
+- **5 OEM adapters** – Honda (camelCase), Hero (snake_case, DD-MM-YYYY), TVS (epoch dates, text odometer, type codes), Bajaj (slash dates, "3200 km", status), Royal Enfield (nested objects, miles or km).
+- **Seed script** – 500 vehicles (100 per OEM), 10 models, years 2018–2024, Telangana registrations (`TS-XX-XX-XXXX`), service every 3,000–4,000 km or 4–6 months. Exactly 75 vehicles carry one injected anomaly: 25 odometer rollbacks, 25 long gaps, 25 implausible jumps. It is deterministic and safe to run twice.
+- **Ingestion API** – OEM records and owner garage visits.
+- **Chassis search** – last 5 characters, rate limited to 3 attempts per IP per 10 minutes, registration masked.
+- **Service history** – sorted by date, with the gap in months before each entry.
+- **Data quality CSV** – `chassis, oem, model, year, careScore, odometerStatus, flagCount`.
+- **Showroom price table** – approximate prices for all 10 models.
 
-## Tech stack
+## Run it
 
-Node.js 20, Express, Prisma ORM, PostgreSQL 15, Zod, express-rate-limit, Jest + Supertest.
+Requires Node.js 20.
 
-## Quick start
+### Quick demo (no database)
 
 ```bash
 npm install
-cp .env.example .env            # Windows: copy .env.example .env
-npx prisma generate
-npx prisma migrate dev --name init
-node seed.js
-npm test
-npm run dev                     # local server on http://localhost:4000
+npm run demo:nodb        # http://localhost:4000
 ```
 
-PostgreSQL must be running. With Docker:
-`docker run -d -p 5432:5432 -e POSTGRES_USER=relay -e POSTGRES_PASSWORD=relay_dev_pass -e POSTGRES_DB=relaydb postgres:15`
+Uses the same generated 500 vehicles, held in memory. Data resets when the server stops.
 
-Inside the project Docker Compose stack: `docker compose exec api node seed.js`
+### With PostgreSQL
 
-## Demo interface
+```bash
+cp .env.example .env     # set DATABASE_URL
+npm install
+npx prisma generate
+npx prisma migrate dev --name init
+node seed.js             # run twice: still 500 vehicles
+npm run demo             # http://localhost:4000
+npm test
+```
 
-`npm run demo` serves a small web page at http://localhost:4000 (chassis check with service timeline, adapter playground, add garage visit). See `DEMO.md` for the walkthrough. The page lives in `public/index.html`; `src/server.dev.js` is only for local demos and is not part of the real gateway.
-
-## Seed script
-
-`node seed.js` (run from `/backend`):
-- 500 vehicles, 100 per OEM, 2 models per OEM, years 2018-2024
-- Registrations in Telangana format `TS-XX-XX-XXXX`
-- Service every 3,000-4,000 km or 4-6 months, whichever comes first
-- Exactly 75 vehicles with one injected anomaly: 25 odometer rollback, 25 long gap, 25 implausible jump
-- Every record is created in the OEM's raw format and passed through the real adapter and Zod schema before insert
-- Deterministic (fixed random seed) and idempotent (running it twice does not duplicate data)
-- Fills the `ShowroomPrice` table and writes `exports/data_quality.csv`
+To show the real chassis-search limit, start with `CHASSIS_SEARCH_LIMIT=3 npm run demo`.
 
 ## API
 
-Base URL `/api/v1`. Responses: `{ "success": true/false, "data": {}, "error": "string" }`.
+Base URL `/api/v1`. Responses use `{ "success": true/false, "data": {}, "error": "string" }`.
 
-| Method | Path | Auth | Purpose |
-|---|---|---|---|
-| GET | `/vehicles/search?chassis=XXXXX` | public | Match on last 5 chassis characters. Limit: 3 per IP per 10 min. Registration is masked. |
-| GET | `/vehicles/:id/history` | required | Full service history sorted by date, with `gapMonthsFromPrevious`. |
-| POST | `/ingest/oem` | required | `{ oemName, records: [raw], vehicles?: [{chassisNo, model, year, registration}] }`. Normalises via the adapter and inserts. Duplicates are skipped. |
-| POST | `/ingest/owner` | required | Seller adds a local garage visit. Stored unconfirmed (`LOCAL_GARAGE`). |
-| POST | `/ingest/preview` | required | Converts raw OEM records to the common format without saving (used by the demo playground). |
+| Method | Path                             | Purpose                                                                                                         |
+| ------ | -------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| GET    | `/vehicles/search?chassis=XXXXX` | Match on the last 5 characters (public, rate limited)                                                           |
+| GET    | `/vehicles/:id/history`          | Full service history, sorted, with gaps                                                                         |
+| POST   | `/ingest/oem`                    | Raw OEM records → adapter → Zod → insert. Duplicates skipped. Optional `vehicles` list creates missing vehicles |
+| POST   | `/ingest/owner`                  | Owner garage visit, stored as unconfirmed                                                                       |
+| POST   | `/ingest/preview`                | Convert raw records without saving (demo)                                                                       |
 
-Auth is applied by the gateway (`createIngestRouter({ requireAuth })`). For local testing `src/server.dev.js` mounts everything without auth.
+A Postman collection is included: `RELAY-Module4.postman_collection.json`.
 
-## Adding a new OEM
+## Project structure
 
-See `ADAPTERS.md`. About 30 minutes: add the OEM name to the schema, write a `transform()` adapter, register it, add a test.
+```
+backend/
+├── seed.js                  # node seed.js
+├── prisma/schema.prisma
+├── public/index.html        # demo interface
+├── src/
+│   ├── adapters/            # honda, hero, tvs, bajaj, royalEnfield + common schema
+│   ├── routes/              # vehicles.js, ingest.js
+│   ├── seed/                # deterministic data generator
+│   ├── lib/                 # odometer rules, care score, CSV export
+│   ├── server.dev.js        # local demo server
+│   └── server.memory.js     # demo server without a database
+├── tests/                   # Jest + Supertest
+├── ADAPTERS.md
+└── DEMO.md
+```
+
+## Tests
+
+Jest tests cover the adapters, the seed dataset (500 vehicles, exactly 75 anomalies, adapter round-trip), chassis search with rate limiting, and the ingestion endpoints.
+
+```bash
+npm test
+```
 
 ## Notes for the team
 
-- `prisma/schema.prisma` follows the sprint spec. If the Data Engine module (Althaf) has committed its own schema, use that one.
-- `src/lib/odometerRules.js` and `src/lib/careScore.js` are temporary local copies of the Data Engine logic, used only for seed validation and the CSV. Replace them with the real module once merged.
+- `prisma/schema.prisma` follows the sprint specification. If the Data Engine module already has a schema, use that one.
+- `src/lib/odometerRules.js` and `src/lib/careScore.js` are temporary local copies of the Data Engine logic, used for seed validation and the CSV. Replace them once that module is merged.
 - Showroom prices in `src/data/models.js` are approximate.
+- `src/server.dev.js` is for local demos only. The real gateway and authentication belong to the Auth module.
 - Never commit `.env`, passwords or signing keys.

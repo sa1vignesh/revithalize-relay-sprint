@@ -59,7 +59,8 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding
 <section id="visit">
   <div class="card">
     <p class="muted">A seller adds a visit to a local garage. It is saved as <b>unconfirmed</b> and shows with a hollow dot in the timeline.</p>
-    <p id="visitFor" class="muted"><b>No vehicle selected.</b> Do a chassis check first, then come back here.</p>
+    <p id="visitFor" class="muted"><b>No vehicle selected.</b> Enter the last 5 chassis characters below, or do a chassis check first.</p>
+    <label>Vehicle chassis (last 5 characters)</label><input id="vChassis" maxlength="5" placeholder="ABC12" style="text-transform:uppercase">
     <label>Service date</label><input type="date" id="vDate">
     <label>Odometer (km)</label><input type="number" id="vKm" min="0" placeholder="e.g. 24500">
     <label>Garage name</label><input id="vGarage" placeholder="Raju Garage">
@@ -114,6 +115,7 @@ async function search(c5) {
   if (!s.success) return out.innerHTML = `<div class="banner b-bad">${esc(s.error)}</div>`;
   if (!s.data.length) { current = null; return out.innerHTML = '<div class="banner b-warn">No RELAY record found for this vehicle.</div>'; }
   await showVehicle(s.data[0]);
+  document.getElementById("vChassis").value = c5;
 }
 async function showVehicle(v) {
   current = v;
@@ -167,7 +169,14 @@ document.getElementById("normBtn").onclick = async () => {
 // ---- tab 3: owner garage visit
 document.getElementById("visitBtn").onclick = async () => {
   const msg = document.getElementById("visitMsg");
-  if (!current) return msg.innerHTML = '<div class="banner b-warn">Do a chassis check first so a vehicle is selected.</div>';
+  const c5 = document.getElementById("vChassis").value.trim().toUpperCase();
+  if (c5.length === 5) {
+    const s = await call("/vehicles/search?chassis=" + encodeURIComponent(c5));
+    if (!s.success || !s.data.length) return msg.innerHTML = '<div class="banner b-bad">No vehicle found for that chassis.</div>';
+    current = s.data[0];
+    document.getElementById("visitFor").innerHTML = `Adding a visit for <b>${esc(current.oem)} ${esc(current.model)}</b> (${esc(current.registrationMasked)}).`;
+  }
+  if (!current) return msg.innerHTML = '<div class="banner b-warn">Enter the last 5 chassis characters first.</div>';
   const body = { vehicleId: current.id, serviceDate: document.getElementById("vDate").value, odometerKm: Number(document.getElementById("vKm").value), garageName: document.getElementById("vGarage").value || undefined };
   const r = await call("/ingest/owner", { method: "POST", body: JSON.stringify(body) });
   if (!r.success) return msg.innerHTML = `<div class="banner b-bad">${esc(r.error)}</div>`;
