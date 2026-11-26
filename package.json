@@ -7,10 +7,15 @@
     "export:csv": "node scripts/exportQualityCsv.js",
     "dev": "node src/server.dev.js",
     "demo": "node src/server.dev.js",
-    "test": "jest"
+    "test": "jest",
+    "demo:nodb": "node src/server.memory.js"
   },
-  "prisma": { "seed": "node seed.js" },
-  "jest": { "testEnvironment": "node" },
+  "prisma": {
+    "seed": "node seed.js"
+  },
+  "jest": {
+    "testEnvironment": "node"
+  },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "express": "^4.21.0",
